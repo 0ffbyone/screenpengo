@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"unsafe"
 
 	"gioui.org/app"
 	"gioui.org/f32"
@@ -40,6 +41,11 @@ type Annotator struct {
 	lastLogAt time.Time
 
 	x11Ready bool
+	x11OverlayTried bool
+	opacity uint32 // 0..0xFFFFFFFF
+	clickThrough bool
+	x11Display unsafe.Pointer
+	x11Window uintptr
 }
 
 func main() {
@@ -56,6 +62,7 @@ func main() {
 		)
 
 		a := &Annotator{
+			opacity: 0x50000000, // ~30%
 			col:     color.NRGBA{R: 255, A: 255}, // red default
 			widthDp: 6,
 			debug:   debug,
@@ -78,6 +85,7 @@ func main() {
 					}
 					a.x11Ready = true
 				}
+				a.tryEnableOverlay(e)
 			case app.FrameEvent:
 				gtx := app.NewContext(&ops, e)
 				a.frame(gtx)
@@ -86,6 +94,30 @@ func main() {
 		}
 	}()
 	app.Main()
+}
+
+
+func (a *Annotator) tryEnableOverlay(e app.X11ViewEvent) {
+	if a.x11OverlayTried {
+		return
+	}
+	a.x11OverlayTried = true
+	a.x11Display = e.Display
+	a.x11Window = e.Window
+	if err := x11EnableOverlayHints(e.Display, e.Window); err != nil {
+		if a.debug {
+			log.Printf("x11 overlay hints failed: %v", err)
+		}
+		return
+	}
+	if a.opacity == 0 {
+		a.opacity = 0x50000000 // ~30% opacity
+	}
+	_ = x11SetOpacity(e.Display, e.Window, a.opacity)
+	_ = x11SetClickThrough(e.Display, e.Window, a.clickThrough)
+	if a.debug {
+		log.Printf("x11 overlay enabled (opacity=0x%08x clickThrough=%v)", a.opacity, a.clickThrough)
+	}
 }
 
 func (a *Annotator) frame(gtx layout.Context) {
@@ -103,7 +135,7 @@ func (a *Annotator) frame(gtx layout.Context) {
 	a.handleKeys(gtx)
 
 	// Background.
-	paint.FillShape(gtx.Ops, color.NRGBA{R: 245, G: 245, B: 245, A: 255}, clip.Rect{Max: gtx.Constraints.Max}.Op())
+	paint.FillShape(gtx.Ops, color.NRGBA{A: 0}, clip.Rect{Max: gtx.Constraints.Max}.Op())
 	if a.dim {
 		paint.FillShape(gtx.Ops, color.NRGBA{A: 120}, clip.Rect{Max: gtx.Constraints.Max}.Op())
 	}
@@ -211,6 +243,24 @@ func (a *Annotator) handleKeys(gtx layout.Context) {
 		case "C":
 			a.strokes = nil
 			a.cur = nil
+		case "T":
+			// Toggle click-through (X11 ShapeInput).
+			a.clickThrough = !a.clickThrough
+			if a.x11Display != nil && a.x11Window != 0 {
+				_ = x11SetClickThrough(a.x11Display, a.x11Window, a.clickThrough)
+			}
+		case "[":
+			// More transparent
+			if a.opacity > 0x08000000 { a.opacity -= 0x08000000 }
+			if a.x11Display != nil && a.x11Window != 0 {
+				_ = x11SetOpacity(a.x11Display, a.x11Window, a.opacity)
+			}
+		case "]":
+			// More opaque
+			if a.opacity < 0xF0000000 { a.opacity += 0x08000000 }
+			if a.x11Display != nil && a.x11Window != 0 {
+				_ = x11SetOpacity(a.x11Display, a.x11Window, a.opacity)
+			}
 		case key.NameEscape:
 			os.Exit(0)
 		}

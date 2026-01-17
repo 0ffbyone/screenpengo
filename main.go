@@ -83,7 +83,7 @@ func run(w *app.Window, debug bool) error {
 			frameN++
 			if frameN == 1 {
 				log.Printf("first frame: size=%v, metric=%+v", e.Size, e.Metric)
-				log.Printf("tip: click inside the window to focus it, then try keys: r/g/b, 1/2/3, c, a, esc")
+				log.Printf("tip: click inside the window to focus it, then try keys: r/g/b/y/o/p/x, 1/2/3, c, a, esc")
 			}
 
 			keys, ptrs := a.handleInput(w, e)
@@ -115,6 +115,10 @@ func (a *Annotator) handleInput(w *app.Window, e app.FrameEvent) (keys, pointers
 			key.Filter{Focus: &a.keyTag, Name: "R"},
 			key.Filter{Focus: &a.keyTag, Name: "G"},
 			key.Filter{Focus: &a.keyTag, Name: "B"},
+			key.Filter{Focus: &a.keyTag, Name: "Y"},
+			key.Filter{Focus: &a.keyTag, Name: "O"},
+			key.Filter{Focus: &a.keyTag, Name: "P"},
+			key.Filter{Focus: &a.keyTag, Name: "X"},
 			key.Filter{Focus: &a.keyTag, Name: "K"},
 			key.Filter{Focus: &a.keyTag, Name: "W"},
 			key.Filter{Focus: &a.keyTag, Name: "A"},
@@ -151,6 +155,20 @@ func (a *Annotator) handleInput(w *app.Window, e app.FrameEvent) (keys, pointers
 			case "B":
 				a.curColor = color.NRGBA{R: 0x00, G: 0x80, B: 0xFF, A: 0xFF}
 				log.Printf("color=blue")
+			case "Y":
+				a.curColor = color.NRGBA{R: 0xFF, G: 0xEB, B: 0x3B, A: 0xFF}
+				log.Printf("color=yellow")
+			case "O":
+				a.curColor = color.NRGBA{R: 0xFF, G: 0x98, B: 0x00, A: 0xFF}
+				log.Printf("color=orange")
+			case "P":
+				a.curColor = color.NRGBA{R: 0xFF, G: 0x40, B: 0xA0, A: 0xFF}
+				log.Printf("color=pink")
+			case "X":
+				// "Blur" pen: draw wide and semi-transparent.
+				a.curColor = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0x40}
+				a.width = 20
+				log.Printf("pen=blur (alpha=%d width=%.0f)", a.curColor.A, a.width)
 			case "K":
 				a.curColor = color.NRGBA{R: 0x00, G: 0x00, B: 0x00, A: 0xFF}
 				log.Printf("color=black")

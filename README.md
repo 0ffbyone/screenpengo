@@ -71,6 +71,9 @@
   - подтащить распознавание фигур из [xournalpp](https://github.com/xournalpp/xournalpp)
       - а может и чего рукописного из [xournalpp_htr](https://github.com/PellelNitram/xournalpp_htr)
 
+
+- `.vscode/launch.json` и всякие настройки отладки может сделать?     
+
 ---
 
 ### Сборка

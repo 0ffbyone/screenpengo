@@ -23,12 +23,26 @@ type Toolbar struct {
 	widthButton  widget.Clickable
 	eraserButton widget.Clickable
 	shapesButton widget.Clickable
+	saveButton   widget.Clickable
+	loadButton   widget.Clickable
 
 	// Shape buttons
 	circleButton    widget.Clickable
 	rectangleButton widget.Clickable
 	lineButton      widget.Clickable
 	arrowButton     widget.Clickable
+
+	// Save panel buttons
+	confirmSaveButton widget.Clickable
+	cancelSaveButton  widget.Clickable
+
+	// Load panel buttons
+	confirmLoadButton widget.Clickable
+	cancelLoadButton  widget.Clickable
+
+	// Text input for filename (used by both save and load)
+	filenameEditor     widget.Editor
+	loadFilenameEditor widget.Editor
 
 	// Color sliders (shown when color picker is open)
 	redSlider   widget.Float
@@ -45,9 +59,11 @@ type Toolbar struct {
 	prevWidthValue float32
 
 	// State to track which panel is open
-	colorPickerOpen bool
-	widthPickerOpen bool
+	colorPickerOpen  bool
+	widthPickerOpen  bool
 	shapesPickerOpen bool
+	saveDialogOpen   bool
+	loadDialogOpen   bool
 
 	// Track if eraser is currently active
 	eraserActive bool
@@ -60,19 +76,35 @@ type Toolbar struct {
 
 // NewToolbar creates a new toolbar with the given theme.
 func NewToolbar(theme *material.Theme) *Toolbar {
+	saveEditor := widget.Editor{
+		SingleLine: true,
+		Submit:     true,
+	}
+	saveEditor.SetText("my-drawing")
+
+	loadEditor := widget.Editor{
+		SingleLine: true,
+		Submit:     true,
+	}
+	loadEditor.SetText("my-drawing")
+
 	return &Toolbar{
 		theme: theme,
 		// Initialize sliders with default values
-		redSlider:   widget.Float{Value: 1.0},   // Red default
-		greenSlider: widget.Float{Value: 0.0},
-		blueSlider:  widget.Float{Value: 0.0},
-		widthSlider: widget.Float{Value: 0.5}, // Medium width default
+		redSlider:          widget.Float{Value: 1.0}, // Red default
+		greenSlider:        widget.Float{Value: 0.0},
+		blueSlider:         widget.Float{Value: 0.0},
+		widthSlider:        widget.Float{Value: 0.5}, // Medium width default
+		filenameEditor:     saveEditor,
+		loadFilenameEditor: loadEditor,
 	}
 }
 
 // HandleEvents processes toolbar button clicks and slider changes, returns the current color, width, and state flags.
-func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool, selectedShape tool.ShapeType) {
+func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool, selectedShape tool.ShapeType, saveRequested bool, saveFilename string, loadRequested bool, loadFilename string) {
 	selectedShape = tool.NoShape
+	saveRequested = false
+	loadRequested = false
 	// Handle button clicks
 	if t.colorButton.Clicked(gtx) {
 		t.colorPickerOpen = !t.colorPickerOpen
@@ -118,6 +150,50 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 		t.eraserActive = false
 	}
 
+	// Handle save button
+	if t.saveButton.Clicked(gtx) {
+		t.saveDialogOpen = !t.saveDialogOpen
+		// Close other pickers when opening save dialog
+		if t.saveDialogOpen {
+			t.colorPickerOpen = false
+			t.widthPickerOpen = false
+			t.shapesPickerOpen = false
+			t.loadDialogOpen = false
+		}
+	}
+
+	// Handle save dialog actions
+	if t.confirmSaveButton.Clicked(gtx) {
+		saveRequested = true
+		saveFilename = t.filenameEditor.Text()
+		t.saveDialogOpen = false
+	}
+	if t.cancelSaveButton.Clicked(gtx) {
+		t.saveDialogOpen = false
+	}
+
+	// Handle load button
+	if t.loadButton.Clicked(gtx) {
+		t.loadDialogOpen = !t.loadDialogOpen
+		// Close other pickers when opening load dialog
+		if t.loadDialogOpen {
+			t.colorPickerOpen = false
+			t.widthPickerOpen = false
+			t.shapesPickerOpen = false
+			t.saveDialogOpen = false
+		}
+	}
+
+	// Handle load dialog actions
+	if t.confirmLoadButton.Clicked(gtx) {
+		loadRequested = true
+		loadFilename = t.loadFilenameEditor.Text()
+		t.loadDialogOpen = false
+	}
+	if t.cancelLoadButton.Clicked(gtx) {
+		t.loadDialogOpen = false
+	}
+
 	if t.eraserButton.Clicked(gtx) {
 		// Toggle eraser mode
 		t.eraserActive = !t.eraserActive
@@ -158,7 +234,7 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 	// Get width from slider (map 0.0-1.0 to 2-20 dp)
 	currentWidth = 2 + (t.widthSlider.Value * 18)
 
-	return currentColor, currentWidth, eraserClicked, slidersChanged, selectedShape
+	return currentColor, currentWidth, eraserClicked, slidersChanged, selectedShape, saveRequested, saveFilename, loadRequested, loadFilename
 }
 
 // Layout renders the toolbar as a left sidebar, vertically centered.
@@ -173,7 +249,7 @@ func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return t.layoutMainButtons(gtx)
 				}),
-				// Picker panel (color, width, or shapes) - conditionally rendered
+				// Picker panel (color, width, shapes, save, or load dialog) - conditionally rendered
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if t.colorPickerOpen {
 						return t.layoutColorPicker(gtx)
@@ -181,6 +257,10 @@ func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
 						return t.layoutWidthPicker(gtx)
 					} else if t.shapesPickerOpen {
 						return t.layoutShapesPicker(gtx)
+					} else if t.saveDialogOpen {
+						return t.layoutSaveDialog(gtx)
+					} else if t.loadDialogOpen {
+						return t.layoutLoadDialog(gtx)
 					}
 					return layout.Dimensions{}
 				}),
@@ -227,6 +307,20 @@ func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
 				return btn.Layout(gtx)
 			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Save button
+				btn := material.Button(t.theme, &t.saveButton, "Save")
+				btn.Background = color.NRGBA{R: 50, G: 150, B: 50, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Load button
+				btn := material.Button(t.theme, &t.loadButton, "Load")
+				btn.Background = color.NRGBA{R: 50, G: 100, B: 200, A: 220}
+				return btn.Layout(gtx)
+			}),
 		)
 	})
 }
@@ -271,6 +365,116 @@ func (t *Toolbar) layoutShapesPicker(gtx layout.Context) layout.Dimensions {
 				btn := material.Button(t.theme, &t.arrowButton, "Arrow")
 				btn.Background = color.NRGBA{R: 80, G: 120, B: 180, A: 220}
 				return btn.Layout(gtx)
+			}),
+		)
+	})
+}
+
+// layoutSaveDialog renders the save dialog with filename input
+func (t *Toolbar) layoutSaveDialog(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+			// Title
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Body1(t.theme, "Save Drawing")
+				label.Font.Weight = 700 // Bold
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			// Filename label
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Body2(t.theme, "Filename:")
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			// Filename input
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Set fixed width for editor
+				gtx.Constraints.Min.X = gtx.Dp(200)
+				gtx.Constraints.Max.X = gtx.Dp(200)
+
+				editor := material.Editor(t.theme, &t.filenameEditor, "my-drawing")
+				editor.TextSize = 14
+				return editor.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			// Info text
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Caption(t.theme, "Saved to ~/.screenpen/")
+				label.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 15}.Layout),
+			// Buttons
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceStart}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(t.theme, &t.confirmSaveButton, "Save")
+						btn.Background = color.NRGBA{R: 50, G: 150, B: 50, A: 255}
+						return btn.Layout(gtx)
+					}),
+					layout.Rigid(layout.Spacer{Width: 10}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(t.theme, &t.cancelSaveButton, "Cancel")
+						btn.Background = color.NRGBA{R: 150, G: 50, B: 50, A: 255}
+						return btn.Layout(gtx)
+					}),
+				)
+			}),
+		)
+	})
+}
+
+// layoutLoadDialog renders the load dialog with filename input
+func (t *Toolbar) layoutLoadDialog(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+			// Title
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Body1(t.theme, "Load Drawing")
+				label.Font.Weight = 700 // Bold
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			// Filename label
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Body2(t.theme, "Filename:")
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			// Filename input
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Set fixed width for editor
+				gtx.Constraints.Min.X = gtx.Dp(200)
+				gtx.Constraints.Max.X = gtx.Dp(200)
+
+				editor := material.Editor(t.theme, &t.loadFilenameEditor, "my-drawing")
+				editor.TextSize = 14
+				return editor.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			// Info text
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Caption(t.theme, "Load from ~/.screenpen/")
+				label.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 15}.Layout),
+			// Buttons
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceStart}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(t.theme, &t.confirmLoadButton, "Load")
+						btn.Background = color.NRGBA{R: 50, G: 100, B: 200, A: 255}
+						return btn.Layout(gtx)
+					}),
+					layout.Rigid(layout.Spacer{Width: 10}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(t.theme, &t.cancelLoadButton, "Cancel")
+						btn.Background = color.NRGBA{R: 150, G: 50, B: 50, A: 255}
+						return btn.Layout(gtx)
+					}),
+				)
 			}),
 		)
 	})

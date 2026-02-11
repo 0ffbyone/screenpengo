@@ -179,7 +179,28 @@ func (a *App) applyKeyboardActions(gtx layout.Context) {
 
 func (a *App) applyToolbarActions(gtx layout.Context) {
 	// Get current color, width, and state from toolbar
-	color, widthDp, eraserClicked, slidersChanged, selectedShape := a.toolbar.HandleEvents(gtx)
+	color, widthDp, eraserClicked, slidersChanged, selectedShape, saveRequested, saveFilename, loadRequested, loadFilename := a.toolbar.HandleEvents(gtx)
+
+	// Handle save request
+	if saveRequested {
+		if err := a.canvas.SaveToFile(saveFilename); err != nil {
+			// TODO: Show error in UI
+			println("Error saving file:", err.Error())
+		} else {
+			println("Saved to ~/.screenpen/" + saveFilename + ".json")
+		}
+	}
+
+	// Handle load request
+	if loadRequested {
+		if err := a.canvas.LoadFromFile(loadFilename); err != nil {
+			// TODO: Show error in UI
+			println("Error loading file:", err.Error())
+		} else {
+			println("Loaded from ~/.screenpen/" + loadFilename + ".json")
+			gtx.Execute(op.InvalidateCmd{}) // Redraw to show loaded content
+		}
+	}
 
 	// Handle shape selection
 	if selectedShape != tool.NoShape {

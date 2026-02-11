@@ -1,7 +1,10 @@
 package canvas
 
 import (
+	"encoding/json"
 	"image/color"
+	"os"
+	"path/filepath"
 
 	"gioui.org/f32"
 
@@ -164,4 +167,41 @@ func sqrtFloat64(x float64) float64 {
 		result = (result + x/result) / 2
 	}
 	return result
+}
+
+// SaveToFile saves the canvas state to a JSON file
+func (c *Canvas) SaveToFile(filename string) error {
+	// Create save directory if it doesn't exist
+	saveDir := filepath.Join(os.Getenv("HOME"), ".screenpen")
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return err
+	}
+
+	// Full path
+	fullPath := filepath.Join(saveDir, filename+".json")
+
+	// Serialize canvas to JSON
+	data, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	// Write to file
+	return os.WriteFile(fullPath, data, 0644)
+}
+
+// LoadFromFile loads the canvas state from a JSON file
+func (c *Canvas) LoadFromFile(filename string) error {
+	// Full path
+	saveDir := filepath.Join(os.Getenv("HOME"), ".screenpen")
+	fullPath := filepath.Join(saveDir, filename+".json")
+
+	// Read file
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return err
+	}
+
+	// Deserialize JSON to canvas
+	return json.Unmarshal(data, c)
 }

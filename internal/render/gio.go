@@ -1,7 +1,6 @@
 package render
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -21,8 +20,6 @@ type GioRenderer struct {
 
 // RenderFrame renders the complete frame including background, dimming, and all strokes.
 func (r *GioRenderer) RenderFrame(gtx layout.Context, c *canvas.Canvas) {
-	fmt.Printf("RenderFrame - Strokes: %d, Current: %v, Constraints: %v\n", len(c.Strokes), c.Current != nil, gtx.Constraints.Max)
-
 	// Background (transparent).
 	paint.FillShape(gtx.Ops, color.NRGBA{A: 0}, clip.Rect{Max: gtx.Constraints.Max}.Op())
 
@@ -33,13 +30,11 @@ func (r *GioRenderer) RenderFrame(gtx layout.Context, c *canvas.Canvas) {
 
 	// Draw all completed strokes.
 	for i := range c.Strokes {
-		fmt.Printf("Rendering stroke %d with %d points, color: %v\n", i, len(c.Strokes[i].Points), c.Strokes[i].Color)
 		r.renderStroke(gtx.Ops, &c.Strokes[i])
 	}
 
 	// Draw current stroke being drawn.
 	if c.Current != nil {
-		fmt.Printf("Rendering current stroke with %d points\n", len(c.Current.Points))
 		r.renderStroke(gtx.Ops, c.Current)
 	}
 }

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 
 	"gioui.org/io/event"
@@ -11,40 +12,25 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
-
-	"screenpengo/internal/input"
-	"screenpengo/internal/tool"
-)
-
-// Button label constants
-const (
-	labelRed    = "R"
-	labelGreen  = "G"
-	labelBlue   = "B"
-	labelYellow = "Y"
-	labelOrange = "O"
-	labelPink   = "P"
-	labelBlur   = "X"
-	labelThin   = "Thin"
-	labelMedium = "Med"
-	labelThick  = "Thick"
 )
 
 // Toolbar provides a UI overlay for selecting colors and widths.
 type Toolbar struct {
-	// Color buttons
-	btnRed    widget.Clickable
-	btnGreen  widget.Clickable
-	btnBlue   widget.Clickable
-	btnYellow widget.Clickable
-	btnOrange widget.Clickable
-	btnPink   widget.Clickable
-	btnBlur   widget.Clickable
+	// Main buttons
+	colorButton widget.Clickable
+	widthButton widget.Clickable
 
-	// Width buttons
-	btnThin   widget.Clickable
-	btnMedium widget.Clickable
-	btnThick  widget.Clickable
+	// Color sliders (shown when color picker is open)
+	redSlider   widget.Float
+	greenSlider widget.Float
+	blueSlider  widget.Float
+
+	// Width slider (shown when width picker is open)
+	widthSlider widget.Float
+
+	// State to track which panel is open
+	colorPickerOpen bool
+	widthPickerOpen bool
 
 	// For event filtering
 	panelTag struct{}
@@ -54,116 +40,129 @@ type Toolbar struct {
 
 // NewToolbar creates a new toolbar with the given theme.
 func NewToolbar(theme *material.Theme) *Toolbar {
-	return &Toolbar{theme: theme}
+	return &Toolbar{
+		theme: theme,
+		// Initialize sliders with default values
+		redSlider:   widget.Float{Value: 1.0},   // Red default
+		greenSlider: widget.Float{Value: 0.0},
+		blueSlider:  widget.Float{Value: 0.0},
+		widthSlider: widget.Float{Value: 0.5}, // Medium width default
+	}
 }
 
-// HandleEvents processes toolbar button clicks and returns actions.
-func (t *Toolbar) HandleEvents(gtx layout.Context) []input.Action {
-	var actions []input.Action
-
-	// Color buttons
-	if t.btnRed.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Red,
-		})
-	}
-	if t.btnGreen.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Green,
-		})
-	}
-	if t.btnBlue.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Blue,
-		})
-	}
-	if t.btnYellow.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Yellow,
-		})
-	}
-	if t.btnOrange.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Orange,
-		})
-	}
-	if t.btnPink.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Pink,
-		})
-	}
-	if t.btnBlur.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetColor,
-			ColorPreset: tool.Blur,
-		})
+// HandleEvents processes toolbar button clicks and slider changes, returns the current color and width.
+func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32) {
+	// Handle button clicks
+	if t.colorButton.Clicked(gtx) {
+		t.colorPickerOpen = !t.colorPickerOpen
+		// Close width picker when opening color picker
+		if t.colorPickerOpen {
+			t.widthPickerOpen = false
+		}
 	}
 
-	// Width buttons
-	if t.btnThin.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetWidth,
-			WidthPreset: tool.Thin,
-		})
-	}
-	if t.btnMedium.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetWidth,
-			WidthPreset: tool.Medium,
-		})
-	}
-	if t.btnThick.Clicked(gtx) {
-		actions = append(actions, input.Action{
-			Type:        input.SetWidth,
-			WidthPreset: tool.Thick,
-		})
+	if t.widthButton.Clicked(gtx) {
+		t.widthPickerOpen = !t.widthPickerOpen
+		// Close color picker when opening width picker
+		if t.widthPickerOpen {
+			t.colorPickerOpen = false
+		}
 	}
 
-	return actions
+	// Get color from RGB sliders (0.0 to 1.0)
+	currentColor = color.NRGBA{
+		R: uint8(t.redSlider.Value * 255),
+		G: uint8(t.greenSlider.Value * 255),
+		B: uint8(t.blueSlider.Value * 255),
+		A: 255,
+	}
+
+	// Get width from slider (map 0.0-1.0 to 2-20 dp)
+	currentWidth = 2 + (t.widthSlider.Value * 18)
+
+	return currentColor, currentWidth
 }
 
 // Layout renders the toolbar as a left sidebar, vertically centered.
-func (t *Toolbar) Layout(gtx layout.Context, currentColor tool.ColorPreset, currentWidth tool.WidthPreset) layout.Dimensions {
-	fmt.Printf("Toolbar.Layout called - Constraints: Min=%v Max=%v\n", gtx.Constraints.Min, gtx.Constraints.Max)
-
-	// Vertically center the sidebar
-	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
+	// Vertically center the toolbar
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Flexed(1, layout.Spacer{}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return t.layoutPanel(gtx, currentColor, currentWidth)
+			// Horizontal layout: buttons on left, picker panel on right (if open)
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+				// Main toolbar buttons
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return t.layoutMainButtons(gtx)
+				}),
+				// Picker panel (color or width) - conditionally rendered
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if t.colorPickerOpen {
+						return t.layoutColorPicker(gtx)
+					} else if t.widthPickerOpen {
+						return t.layoutWidthPicker(gtx)
+					}
+					return layout.Dimensions{}
+				}),
+			)
 		}),
 		layout.Flexed(1, layout.Spacer{}.Layout),
 	)
-
-	fmt.Printf("Toolbar dimensions: %v\n", dims.Size)
-	return dims
 }
 
-func (t *Toolbar) layoutPanel(gtx layout.Context, currentColor tool.ColorPreset, currentWidth tool.WidthPreset) layout.Dimensions {
-	return layout.Inset{Top: 20, Bottom: 20, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+// layoutMainButtons renders the compact vertical button bar
+func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Color button with current color preview
+				btn := material.Button(t.theme, &t.colorButton, "Color")
+				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Width button
+				btn := material.Button(t.theme, &t.widthButton, "Width")
+				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
+				return btn.Layout(gtx)
+			}),
+		)
+	})
+}
+
+// layoutColorPicker renders the RGB sliders panel
+func (t *Toolbar) layoutColorPicker(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return t.layoutColorSliders(gtx)
+	})
+}
+
+// layoutWidthPicker renders the width slider panel
+func (t *Toolbar) layoutWidthPicker(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return t.layoutWidthSlider(gtx)
+	})
+}
+
+// drawPanel is a helper that draws a white semi-transparent background with padding
+func (t *Toolbar) drawPanel(gtx layout.Context, w layout.Widget) layout.Dimensions {
+	return layout.Inset{Top: 10, Bottom: 10, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		backgroundColor := color.NRGBA{R: 255, G: 255, B: 255, A: 240}
 
-		// Use Stack to layer background behind buttons
+		// Use Stack to layer background behind content
 		return layout.Stack{}.Layout(gtx,
 			// Background layer
 			layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-				// Draw background
-				fmt.Printf("Drawing background sized to: %v\n", gtx.Constraints.Min)
 				defer clip.Rect{Max: gtx.Constraints.Min}.Push(gtx.Ops).Pop()
 				paint.ColorOp{Color: backgroundColor}.Add(gtx.Ops)
 				paint.PaintOp{}.Add(gtx.Ops)
 				return layout.Dimensions{Size: gtx.Constraints.Min}
 			}),
-			// Button layer on top
+			// Content layer on top
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: 10, Bottom: 10, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					// Capture events
+					// Capture pointer events to prevent drawing on panel
 					defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
 					event.Op(gtx.Ops, &t.panelTag)
 					for {
@@ -177,78 +176,118 @@ func (t *Toolbar) layoutPanel(gtx layout.Context, currentColor tool.ColorPreset,
 						_ = ev
 					}
 
-					// Buttons
-					return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceBetween}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return t.layoutColorButtons(gtx, currentColor)
-						}),
-						layout.Rigid(layout.Spacer{Height: 20}.Layout),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return t.layoutWidthButtons(gtx, currentWidth)
-						}),
-					)
+					return w(gtx)
 				})
 			}),
 		)
 	})
 }
 
-func (t *Toolbar) layoutColorButtons(gtx layout.Context, current tool.ColorPreset) layout.Dimensions {
+func (t *Toolbar) layoutColorSliders(gtx layout.Context) layout.Dimensions {
+	// Constrain the width to 200dp
+	gtx.Constraints.Max.X = gtx.Dp(200)
+
 	return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
-		layout.Rigid(t.makeColorButton(labelRed, tool.Red, &t.btnRed, current == tool.Red)),
+		// Color preview
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			previewColor := color.NRGBA{
+				R: uint8(t.redSlider.Value * 255),
+				G: uint8(t.greenSlider.Value * 255),
+				B: uint8(t.blueSlider.Value * 255),
+				A: 255,
+			}
+			size := gtx.Dp(60)
+			defer clip.Rect{Max: image.Pt(size, size)}.Push(gtx.Ops).Pop()
+			paint.ColorOp{Color: previewColor}.Add(gtx.Ops)
+			paint.PaintOp{}.Add(gtx.Ops)
+			return layout.Dimensions{Size: image.Pt(size, size)}
+		}),
+		layout.Rigid(layout.Spacer{Height: 10}.Layout),
+		// Red slider
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.Body1(t.theme, "R")
+					label.Color = color.NRGBA{R: 255, G: 100, B: 100, A: 255}
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(layout.Spacer{Width: 5}.Layout),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					// Fixed width for slider
+					gtx.Constraints.Min.X = gtx.Dp(150)
+					gtx.Constraints.Max.X = gtx.Dp(150)
+					slider := material.Slider(t.theme, &t.redSlider)
+					slider.Color = color.NRGBA{R: 255, G: 100, B: 100, A: 255}
+					return slider.Layout(gtx)
+				}),
+			)
+		}),
 		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelGreen, tool.Green, &t.btnGreen, current == tool.Green)),
+		// Green slider
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.Body1(t.theme, "G")
+					label.Color = color.NRGBA{R: 100, G: 255, B: 100, A: 255}
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(layout.Spacer{Width: 5}.Layout),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					// Fixed width for slider
+					gtx.Constraints.Min.X = gtx.Dp(150)
+					gtx.Constraints.Max.X = gtx.Dp(150)
+					slider := material.Slider(t.theme, &t.greenSlider)
+					slider.Color = color.NRGBA{R: 100, G: 255, B: 100, A: 255}
+					return slider.Layout(gtx)
+				}),
+			)
+		}),
 		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelBlue, tool.Blue, &t.btnBlue, current == tool.Blue)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelYellow, tool.Yellow, &t.btnYellow, current == tool.Yellow)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelOrange, tool.Orange, &t.btnOrange, current == tool.Orange)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelPink, tool.Pink, &t.btnPink, current == tool.Pink)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeColorButton(labelBlur, tool.Blur, &t.btnBlur, current == tool.Blur)),
+		// Blue slider
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					label := material.Body1(t.theme, "B")
+					label.Color = color.NRGBA{R: 100, G: 100, B: 255, A: 255}
+					return label.Layout(gtx)
+				}),
+				layout.Rigid(layout.Spacer{Width: 5}.Layout),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					// Fixed width for slider
+					gtx.Constraints.Min.X = gtx.Dp(150)
+					gtx.Constraints.Max.X = gtx.Dp(150)
+					slider := material.Slider(t.theme, &t.blueSlider)
+					slider.Color = color.NRGBA{R: 100, G: 100, B: 255, A: 255}
+					return slider.Layout(gtx)
+				}),
+			)
+		}),
 	)
 }
 
-func (t *Toolbar) layoutWidthButtons(gtx layout.Context, current tool.WidthPreset) layout.Dimensions {
+func (t *Toolbar) layoutWidthSlider(gtx layout.Context) layout.Dimensions {
+	// Constrain the width to 200dp
+	gtx.Constraints.Max.X = gtx.Dp(200)
+
 	return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
-		layout.Rigid(t.makeWidthButton(labelThin, tool.Thin, &t.btnThin, current == tool.Thin)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeWidthButton(labelMedium, tool.Medium, &t.btnMedium, current == tool.Medium)),
-		layout.Rigid(layout.Spacer{Height: 5}.Layout),
-		layout.Rigid(t.makeWidthButton(labelThick, tool.Thick, &t.btnThick, current == tool.Thick)),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			label := material.Body1(t.theme, "Width")
+			return label.Layout(gtx)
+		}),
+		layout.Rigid(layout.Spacer{Height: 10}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			// Fixed width for slider to make it bigger and more usable
+			gtx.Constraints.Min.X = gtx.Dp(180)
+			gtx.Constraints.Max.X = gtx.Dp(180)
+			slider := material.Slider(t.theme, &t.widthSlider)
+			return slider.Layout(gtx)
+		}),
+		layout.Rigid(layout.Spacer{Height: 10}.Layout),
+		// Width preview - show current width value
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			currentWidth := 2 + (t.widthSlider.Value * 18)
+			label := material.Body2(t.theme, fmt.Sprintf("%.1f dp", currentWidth))
+			return label.Layout(gtx)
+		}),
 	)
-}
-
-func (t *Toolbar) makeColorButton(label string, _ tool.ColorPreset, clk *widget.Clickable, selected bool) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		btn := material.Button(t.theme, clk, label)
-		btn.CornerRadius = 8
-
-		if selected {
-			btn.Background = color.NRGBA{R: 70, G: 130, B: 220, A: 255}
-		} else {
-			btn.Background = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
-		}
-
-		gtx.Constraints.Min.X = gtx.Dp(60)
-		return btn.Layout(gtx)
-	}
-}
-
-func (t *Toolbar) makeWidthButton(label string, _ tool.WidthPreset, clk *widget.Clickable, selected bool) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		btn := material.Button(t.theme, clk, label)
-		btn.CornerRadius = 8
-
-		if selected {
-			btn.Background = color.NRGBA{R: 70, G: 130, B: 220, A: 255}
-		} else {
-			btn.Background = color.NRGBA{R: 200, G: 200, B: 200, A: 255}
-		}
-
-		gtx.Constraints.Min.X = gtx.Dp(60)
-		return btn.Layout(gtx)
-	}
 }

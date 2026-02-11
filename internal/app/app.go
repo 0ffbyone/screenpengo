@@ -76,7 +76,7 @@ func (a *App) Frame(gtx layout.Context) {
 		}),
 		// Toolbar layer (foreground)
 		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			return a.toolbar.Layout(gtx, a.pen.ColorPreset, a.pen.WidthPreset)
+			return a.toolbar.Layout(gtx)
 		}),
 	)
 }
@@ -126,20 +126,15 @@ func (a *App) applyKeyboardActions(gtx layout.Context) {
 }
 
 func (a *App) applyToolbarActions(gtx layout.Context) {
-	actions := a.toolbar.HandleEvents(gtx)
+	// Get current color and width from toolbar sliders
+	color, widthDp := a.toolbar.HandleEvents(gtx)
 
-	for _, action := range actions {
-		switch action.Type {
-		case input.SetColor:
-			a.pen.SetColor(action.ColorPreset)
-		case input.SetWidth:
-			a.pen.SetWidth(action.WidthPreset)
-		}
-	}
+	// Update pen config directly
+	a.pen.Color = color
+	a.pen.WidthDp = widthDp
 
-	if len(actions) > 0 {
-		gtx.Execute(op.InvalidateCmd{})
-	}
+	// Always invalidate to keep UI responsive
+	gtx.Execute(op.InvalidateCmd{})
 }
 
 // scaleToPixels converts device-independent units to physical screen pixels

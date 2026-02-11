@@ -1,9 +1,11 @@
 package app
 
 import (
+	"image"
 	"image/color"
 	"os"
 
+	"gioui.org/f32"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -27,6 +29,9 @@ type App struct {
 	renderer *render.GioRenderer
 	toolbar  *ui.Toolbar
 	theme    *material.Theme
+
+	cursorPos   f32.Point
+	showCursor  bool
 
 	keyTag struct{}
 	ptrTag struct{}
@@ -71,7 +76,13 @@ func (a *App) Frame(gtx layout.Context) {
 	layout.Stack{}.Layout(gtx,
 		// Canvas layer (background)
 		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			a.renderer.RenderFrame(gtx, a.canvas)
+			// Calculate cursor radius in pixels
+			cursorRadiusPixels := int(scaleToPixels(gtx, a.pen.WidthDp) / 2)
+			cursorPosPixels := image.Point{
+				X: int(a.cursorPos.X),
+				Y: int(a.cursorPos.Y),
+			}
+			a.renderer.RenderFrame(gtx, a.canvas, cursorPosPixels, cursorRadiusPixels, a.showCursor)
 			return layout.Dimensions{Size: gtx.Constraints.Max}
 		}),
 		// Toolbar layer (foreground)
@@ -89,10 +100,16 @@ func (a *App) applyPointerActions(gtx layout.Context) {
 		case input.StartStroke:
 			widthInPixels := scaleToPixels(gtx, a.pen.WidthDp)
 			a.canvas.StartStroke(a.pen.Color, widthInPixels, action.Position)
+			a.showCursor = false // Hide cursor while drawing
 		case input.AddPoint:
 			a.canvas.AddPoint(action.Position)
 		case input.FinishStroke:
 			a.canvas.FinishStroke()
+			a.showCursor = true // Show cursor again after drawing
+		case input.MoveCursor:
+			a.cursorPos = action.Position
+			a.showCursor = true
+			gtx.Execute(op.InvalidateCmd{}) // Redraw to update cursor position
 		}
 	}
 

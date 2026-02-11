@@ -55,10 +55,9 @@ func (p *PenConfig) SetColor(preset ColorPreset) {
 		p.WidthDp = 20
 		p.WidthPreset = Thick
 	case Eraser:
-		// Eraser: opaque white, medium-thick width
+		// Eraser: opaque white, keeps current width
 		p.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-		p.WidthDp = 15
-		p.WidthPreset = Thick
+		// Don't change width - keep whatever width is currently set
 	}
 }
 

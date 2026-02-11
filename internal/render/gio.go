@@ -18,8 +18,8 @@ type GioRenderer struct {
 	Dim bool
 }
 
-// RenderFrame renders the complete frame including background, dimming, and all strokes.
-func (r *GioRenderer) RenderFrame(gtx layout.Context, c *canvas.Canvas) {
+// RenderFrame renders the complete frame including background, dimming, all strokes, and cursor.
+func (r *GioRenderer) RenderFrame(gtx layout.Context, c *canvas.Canvas, cursorPos image.Point, cursorRadius int, showCursor bool) {
 	// Background (transparent).
 	paint.FillShape(gtx.Ops, color.NRGBA{A: 0}, clip.Rect{Max: gtx.Constraints.Max}.Op())
 
@@ -37,6 +37,25 @@ func (r *GioRenderer) RenderFrame(gtx layout.Context, c *canvas.Canvas) {
 	if c.Current != nil {
 		r.renderStroke(gtx.Ops, c.Current)
 	}
+
+	// Draw cursor circle to show brush size
+	if showCursor && cursorRadius > 0 {
+		r.renderCursor(gtx.Ops, cursorPos, cursorRadius)
+	}
+}
+
+// renderCursor draws a circle outline at the cursor position to show brush size
+func (r *GioRenderer) renderCursor(ops *op.Ops, pos image.Point, radius int) {
+	// Draw a semi-transparent circle outline
+	rect := image.Rect(pos.X-radius, pos.Y-radius, pos.X+radius, pos.Y+radius)
+
+	// Outer circle (outline)
+	paint.FillShape(ops, color.NRGBA{R: 0, G: 0, B: 0, A: 150}, clip.Ellipse(rect).Op(ops))
+
+	// Inner circle (to create outline effect)
+	innerRadius := int(math.Max(1, float64(radius-2)))
+	innerRect := image.Rect(pos.X-innerRadius, pos.Y-innerRadius, pos.X+innerRadius, pos.Y+innerRadius)
+	paint.FillShape(ops, color.NRGBA{A: 0}, clip.Ellipse(innerRect).Op(ops))
 }
 
 // renderStroke renders a single stroke as a series of filled circles.

@@ -205,3 +205,30 @@ func (c *Canvas) LoadFromFile(filename string) error {
 	// Deserialize JSON to canvas
 	return json.Unmarshal(data, c)
 }
+
+// ListSavedFiles returns a list of saved drawing filenames (without .json extension)
+func ListSavedFiles() ([]string, error) {
+	saveDir := filepath.Join(os.Getenv("HOME"), ".screenpen")
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return nil, err
+	}
+
+	// Read directory
+	entries, err := os.ReadDir(saveDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter for .json files and remove extension
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+			name := entry.Name()
+			files = append(files, name[:len(name)-5]) // Remove ".json"
+		}
+	}
+
+	return files, nil
+}

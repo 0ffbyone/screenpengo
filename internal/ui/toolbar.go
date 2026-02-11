@@ -5,14 +5,13 @@ import (
 	"image"
 	"image/color"
 
-	"gioui.org/io/event"
-	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
+	"screenpengo/internal/canvas"
 	"screenpengo/internal/tool"
 )
 
@@ -44,6 +43,11 @@ type Toolbar struct {
 	filenameEditor     widget.Editor
 	loadFilenameEditor widget.Editor
 
+	// File list for load dialog
+	savedFiles       []string
+	fileButtons      []widget.Clickable
+	refreshListButton widget.Clickable
+
 	// Color sliders (shown when color picker is open)
 	redSlider   widget.Float
 	greenSlider widget.Float
@@ -68,9 +72,6 @@ type Toolbar struct {
 	// Track if eraser is currently active
 	eraserActive bool
 
-	// For event filtering
-	panelTag struct{}
-
 	theme *material.Theme
 }
 
@@ -80,13 +81,13 @@ func NewToolbar(theme *material.Theme) *Toolbar {
 		SingleLine: true,
 		Submit:     true,
 	}
-	saveEditor.SetText("my-drawing")
+	saveEditor.SetText("") // Start empty so user enters custom name
 
 	loadEditor := widget.Editor{
 		SingleLine: true,
 		Submit:     true,
 	}
-	loadEditor.SetText("my-drawing")
+	loadEditor.SetText("")
 
 	return &Toolbar{
 		theme: theme,
@@ -181,6 +182,23 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 			t.widthPickerOpen = false
 			t.shapesPickerOpen = false
 			t.saveDialogOpen = false
+			// Refresh file list when opening load dialog
+			t.refreshFileList()
+		}
+	}
+
+	// Handle refresh list button
+	if t.refreshListButton.Clicked(gtx) {
+		t.refreshFileList()
+	}
+
+	// Handle file button clicks
+	for i := range t.fileButtons {
+		if t.fileButtons[i].Clicked(gtx) {
+			loadRequested = true
+			loadFilename = t.savedFiles[i]
+			t.loadDialogOpen = false
+			break
 		}
 	}
 
@@ -393,7 +411,7 @@ func (t *Toolbar) layoutSaveDialog(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min.X = gtx.Dp(200)
 				gtx.Constraints.Max.X = gtx.Dp(200)
 
-				editor := material.Editor(t.theme, &t.filenameEditor, "my-drawing")
+				editor := material.Editor(t.theme, &t.filenameEditor, "Enter filename...")
 				editor.TextSize = 14
 				return editor.Layout(gtx)
 			}),
@@ -425,41 +443,85 @@ func (t *Toolbar) layoutSaveDialog(gtx layout.Context) layout.Dimensions {
 	})
 }
 
-// layoutLoadDialog renders the load dialog with filename input
+// layoutLoadDialog renders the load dialog with list of saved files
 func (t *Toolbar) layoutLoadDialog(gtx layout.Context) layout.Dimensions {
 	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
-			// Title
+			// Title and refresh button
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body1(t.theme, "Load Drawing")
-				label.Font.Weight = 700 // Bold
-				return label.Layout(gtx)
+				return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceBetween}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						label := material.Body1(t.theme, "Load Drawing")
+						label.Font.Weight = 700
+						return label.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(t.theme, &t.refreshListButton, "↻")
+						btn.Background = color.NRGBA{R: 100, G: 100, B: 100, A: 200}
+						return btn.Layout(gtx)
+					}),
+				)
 			}),
 			layout.Rigid(layout.Spacer{Height: 10}.Layout),
-			// Filename label
+			// Saved files label
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Body2(t.theme, "Filename:")
+				label := material.Body2(t.theme, "Saved files:")
+				return label.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			// List of saved files
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if len(t.savedFiles) == 0 {
+					label := material.Caption(t.theme, "No saved files found")
+					label.Color = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
+					return label.Layout(gtx)
+				}
+
+				// Show list of file buttons (max 5 visible with scroll)
+				maxVisible := 5
+				if len(t.savedFiles) > maxVisible {
+					// TODO: Add scrolling support
+				}
+
+				return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+					func() []layout.FlexChild {
+						var children []layout.FlexChild
+						for i, filename := range t.savedFiles {
+							// Capture loop variables
+							idx := i
+							name := filename
+							children = append(children,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									btn := material.Button(t.theme, &t.fileButtons[idx], name)
+									btn.Background = color.NRGBA{R: 70, G: 120, B: 200, A: 220}
+									return btn.Layout(gtx)
+								}),
+							)
+							if i < len(t.savedFiles)-1 {
+								children = append(children, layout.Rigid(layout.Spacer{Height: 3}.Layout))
+							}
+						}
+						return children
+					}()...,
+				)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			// Separator
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				label := material.Caption(t.theme, "or enter filename:")
+				label.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
 				return label.Layout(gtx)
 			}),
 			layout.Rigid(layout.Spacer{Height: 5}.Layout),
 			// Filename input
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				// Set fixed width for editor
 				gtx.Constraints.Min.X = gtx.Dp(200)
 				gtx.Constraints.Max.X = gtx.Dp(200)
-
-				editor := material.Editor(t.theme, &t.loadFilenameEditor, "my-drawing")
+				editor := material.Editor(t.theme, &t.loadFilenameEditor, "")
 				editor.TextSize = 14
 				return editor.Layout(gtx)
 			}),
-			layout.Rigid(layout.Spacer{Height: 5}.Layout),
-			// Info text
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				label := material.Caption(t.theme, "Load from ~/.screenpen/")
-				label.Color = color.NRGBA{R: 100, G: 100, B: 100, A: 255}
-				return label.Layout(gtx)
-			}),
-			layout.Rigid(layout.Spacer{Height: 15}.Layout),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
 			// Buttons
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Spacing: layout.SpaceStart}.Layout(gtx,
@@ -480,6 +542,28 @@ func (t *Toolbar) layoutLoadDialog(gtx layout.Context) layout.Dimensions {
 	})
 }
 
+// IsDialogOpen returns true if save or load dialog is open
+func (t *Toolbar) IsDialogOpen() bool {
+	return t.saveDialogOpen || t.loadDialogOpen
+}
+
+// refreshFileList updates the list of saved files
+func (t *Toolbar) refreshFileList() {
+	files, err := canvas.ListSavedFiles()
+	if err != nil {
+		// If error, clear the list
+		t.savedFiles = nil
+		t.fileButtons = nil
+		return
+	}
+
+	t.savedFiles = files
+	// Create/resize button slice to match file count
+	if len(t.fileButtons) != len(files) {
+		t.fileButtons = make([]widget.Clickable, len(files))
+	}
+}
+
 // drawPanel is a helper that draws a white semi-transparent background with padding
 func (t *Toolbar) drawPanel(gtx layout.Context, w layout.Widget) layout.Dimensions {
 	return layout.Inset{Top: 10, Bottom: 10, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -496,23 +580,7 @@ func (t *Toolbar) drawPanel(gtx layout.Context, w layout.Widget) layout.Dimensio
 			}),
 			// Content layer on top
 			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 10, Bottom: 10, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					// Capture pointer events to prevent drawing on panel
-					defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
-					event.Op(gtx.Ops, &t.panelTag)
-					for {
-						ev, ok := gtx.Event(pointer.Filter{
-							Target: &t.panelTag,
-							Kinds:  pointer.Press | pointer.Drag | pointer.Release,
-						})
-						if !ok {
-							break
-						}
-						_ = ev
-					}
-
-					return w(gtx)
-				})
+				return layout.Inset{Top: 10, Bottom: 10, Left: 10, Right: 10}.Layout(gtx, w)
 			}),
 		)
 	})

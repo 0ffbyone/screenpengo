@@ -69,13 +69,21 @@ func (a *App) Frame(gtx layout.Context) {
 	event.Op(gtx.Ops, &a.ptrTag)
 	area.Pop()
 
-	// Keyboard focus/events.
-	event.Op(gtx.Ops, &a.keyTag)
-	key.InputHintOp{Tag: &a.keyTag, Hint: key.HintAny}.Add(gtx.Ops)
-	gtx.Execute(key.FocusCmd{Tag: &a.keyTag})
+	// Check if any text input dialog is open
+	dialogOpen := a.toolbar.IsDialogOpen()
+
+	// Only capture keyboard focus if no dialog is open
+	// This allows editors to receive keyboard input when dialogs are open
+	if !dialogOpen {
+		event.Op(gtx.Ops, &a.keyTag)
+		key.InputHintOp{Tag: &a.keyTag, Hint: key.HintAny}.Add(gtx.Ops)
+		gtx.Execute(key.FocusCmd{Tag: &a.keyTag})
+	}
 
 	a.applyPointerActions(gtx)
-	a.applyKeyboardActions(gtx)
+	if !dialogOpen {
+		a.applyKeyboardActions(gtx)
+	}
 	a.applyToolbarActions(gtx)
 
 	// Render using Stack to layer canvas and toolbar

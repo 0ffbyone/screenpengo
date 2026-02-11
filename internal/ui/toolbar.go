@@ -39,6 +39,9 @@ type Toolbar struct {
 	colorPickerOpen bool
 	widthPickerOpen bool
 
+	// Track if eraser is currently active
+	eraserActive bool
+
 	// For event filtering
 	panelTag struct{}
 
@@ -77,10 +80,19 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 	}
 
 	if t.eraserButton.Clicked(gtx) {
-		eraserClicked = true
-		// Close all pickers when eraser is clicked
-		t.colorPickerOpen = false
-		t.widthPickerOpen = false
+		// Toggle eraser mode
+		t.eraserActive = !t.eraserActive
+
+		if t.eraserActive {
+			// Entering eraser mode
+			eraserClicked = true
+			// Close all pickers when eraser is activated
+			t.colorPickerOpen = false
+			t.widthPickerOpen = false
+		} else {
+			// Exiting eraser mode - restore slider colors
+			slidersChanged = true
+		}
 	}
 
 	// Check if sliders have changed
@@ -89,6 +101,7 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 	   t.blueSlider.Value != t.prevBlueValue ||
 	   t.widthSlider.Value != t.prevWidthValue {
 		slidersChanged = true
+		t.eraserActive = false // Deactivate eraser when sliders change
 		t.prevRedValue = t.redSlider.Value
 		t.prevGreenValue = t.greenSlider.Value
 		t.prevBlueValue = t.blueSlider.Value
@@ -155,9 +168,15 @@ func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 			}),
 			layout.Rigid(layout.Spacer{Height: 10}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				// Eraser button
+				// Eraser button - highlight when active
 				btn := material.Button(t.theme, &t.eraserButton, "Eraser")
-				btn.Background = color.NRGBA{R: 220, G: 220, B: 220, A: 220}
+				if t.eraserActive {
+					// Bright highlight when eraser is active
+					btn.Background = color.NRGBA{R: 100, G: 180, B: 255, A: 255}
+				} else {
+					// Light gray when inactive
+					btn.Background = color.NRGBA{R: 220, G: 220, B: 220, A: 220}
+				}
 				return btn.Layout(gtx)
 			}),
 		)

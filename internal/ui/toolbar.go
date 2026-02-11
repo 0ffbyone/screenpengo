@@ -12,6 +12,8 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+
+	"screenpengo/internal/tool"
 )
 
 // Toolbar provides a UI overlay for selecting colors and widths.
@@ -20,6 +22,13 @@ type Toolbar struct {
 	colorButton  widget.Clickable
 	widthButton  widget.Clickable
 	eraserButton widget.Clickable
+	shapesButton widget.Clickable
+
+	// Shape buttons
+	circleButton    widget.Clickable
+	rectangleButton widget.Clickable
+	lineButton      widget.Clickable
+	arrowButton     widget.Clickable
 
 	// Color sliders (shown when color picker is open)
 	redSlider   widget.Float
@@ -38,6 +47,7 @@ type Toolbar struct {
 	// State to track which panel is open
 	colorPickerOpen bool
 	widthPickerOpen bool
+	shapesPickerOpen bool
 
 	// Track if eraser is currently active
 	eraserActive bool
@@ -61,7 +71,8 @@ func NewToolbar(theme *material.Theme) *Toolbar {
 }
 
 // HandleEvents processes toolbar button clicks and slider changes, returns the current color, width, and state flags.
-func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool) {
+func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool, selectedShape tool.ShapeType) {
+	selectedShape = tool.NoShape
 	// Handle button clicks
 	if t.colorButton.Clicked(gtx) {
 		t.colorPickerOpen = !t.colorPickerOpen
@@ -73,10 +84,38 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 
 	if t.widthButton.Clicked(gtx) {
 		t.widthPickerOpen = !t.widthPickerOpen
-		// Close color picker when opening width picker
+		// Close other pickers when opening width picker
 		if t.widthPickerOpen {
 			t.colorPickerOpen = false
+			t.shapesPickerOpen = false
 		}
+	}
+
+	if t.shapesButton.Clicked(gtx) {
+		t.shapesPickerOpen = !t.shapesPickerOpen
+		// Close other pickers when opening shapes picker
+		if t.shapesPickerOpen {
+			t.colorPickerOpen = false
+			t.widthPickerOpen = false
+		}
+	}
+
+	// Handle shape selection
+	if t.circleButton.Clicked(gtx) {
+		selectedShape = tool.Circle
+		t.eraserActive = false
+	}
+	if t.rectangleButton.Clicked(gtx) {
+		selectedShape = tool.Rectangle
+		t.eraserActive = false
+	}
+	if t.lineButton.Clicked(gtx) {
+		selectedShape = tool.Line
+		t.eraserActive = false
+	}
+	if t.arrowButton.Clicked(gtx) {
+		selectedShape = tool.Arrow
+		t.eraserActive = false
 	}
 
 	if t.eraserButton.Clicked(gtx) {
@@ -119,7 +158,7 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 	// Get width from slider (map 0.0-1.0 to 2-20 dp)
 	currentWidth = 2 + (t.widthSlider.Value * 18)
 
-	return currentColor, currentWidth, eraserClicked, slidersChanged
+	return currentColor, currentWidth, eraserClicked, slidersChanged, selectedShape
 }
 
 // Layout renders the toolbar as a left sidebar, vertically centered.
@@ -134,12 +173,14 @@ func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return t.layoutMainButtons(gtx)
 				}),
-				// Picker panel (color or width) - conditionally rendered
+				// Picker panel (color, width, or shapes) - conditionally rendered
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					if t.colorPickerOpen {
 						return t.layoutColorPicker(gtx)
 					} else if t.widthPickerOpen {
 						return t.layoutWidthPicker(gtx)
+					} else if t.shapesPickerOpen {
+						return t.layoutShapesPicker(gtx)
 					}
 					return layout.Dimensions{}
 				}),
@@ -179,6 +220,13 @@ func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 				}
 				return btn.Layout(gtx)
 			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Shapes button
+				btn := material.Button(t.theme, &t.shapesButton, "Shapes")
+				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
+				return btn.Layout(gtx)
+			}),
 		)
 	})
 }
@@ -194,6 +242,37 @@ func (t *Toolbar) layoutColorPicker(gtx layout.Context) layout.Dimensions {
 func (t *Toolbar) layoutWidthPicker(gtx layout.Context) layout.Dimensions {
 	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
 		return t.layoutWidthSlider(gtx)
+	})
+}
+
+// layoutShapesPicker renders the shapes selection panel
+func (t *Toolbar) layoutShapesPicker(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(t.theme, &t.circleButton, "Circle")
+				btn.Background = color.NRGBA{R: 80, G: 120, B: 180, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(t.theme, &t.rectangleButton, "Rectangle")
+				btn.Background = color.NRGBA{R: 80, G: 120, B: 180, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(t.theme, &t.lineButton, "Line")
+				btn.Background = color.NRGBA{R: 80, G: 120, B: 180, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 5}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(t.theme, &t.arrowButton, "Arrow")
+				btn.Background = color.NRGBA{R: 80, G: 120, B: 180, A: 220}
+				return btn.Layout(gtx)
+			}),
+		)
 	})
 }
 

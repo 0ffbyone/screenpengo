@@ -24,6 +24,7 @@ import (
 type App struct {
 	canvas   *canvas.Canvas
 	pen      *tool.PenConfig
+	shape    *tool.ShapeConfig
 	keyboard *input.KeyboardHandler
 	pointer  *input.PointerHandler
 	renderer *render.GioRenderer
@@ -32,6 +33,7 @@ type App struct {
 
 	cursorPos   f32.Point
 	showCursor  bool
+	isErasing   bool // Track if current stroke is an eraser stroke
 
 	keyTag struct{}
 	ptrTag struct{}
@@ -47,6 +49,10 @@ func New() *App {
 			WidthDp:     6,
 			ColorPreset: tool.Red,
 			WidthPreset: tool.Medium,
+		},
+		shape: &tool.ShapeConfig{
+			Type:   tool.NoShape,
+			Active: false,
 		},
 		keyboard: input.NewKeyboardHandler(),
 		pointer:  input.NewPointerHandler(),
@@ -99,13 +105,42 @@ func (a *App) applyPointerActions(gtx layout.Context) {
 		switch action.Type {
 		case input.StartStroke:
 			widthInPixels := scaleToPixels(gtx, a.pen.WidthDp)
-			a.canvas.StartStroke(a.pen.Color, widthInPixels, action.Position)
+
+			// Check if we're in eraser mode
+			a.isErasing = (a.pen.ColorPreset == tool.Eraser)
+
+			if a.shape.Active {
+				// Start drawing a shape
+				a.canvas.StartShape(a.shape.Type, a.pen.Color, widthInPixels, action.Position)
+			} else {
+				// Start drawing a freeform stroke
+				a.canvas.StartStroke(a.pen.Color, widthInPixels, action.Position)
+			}
 			a.showCursor = false // Hide cursor while drawing
 		case input.AddPoint:
-			a.canvas.AddPoint(action.Position)
+			if a.shape.Active {
+				// Update shape end position
+				a.canvas.UpdateShape(action.Position)
+			} else {
+				// Add point to freeform stroke
+				a.canvas.AddPoint(action.Position)
+			}
 		case input.FinishStroke:
-			a.canvas.FinishStroke()
+			if a.shape.Active {
+				// Finish the shape
+				a.canvas.FinishShape()
+			} else {
+				// Finish the freeform stroke
+				a.canvas.FinishStroke()
+
+				// If we were erasing, remove shapes that intersect with the eraser stroke
+				if a.isErasing && len(a.canvas.Strokes) > 0 {
+					lastStroke := &a.canvas.Strokes[len(a.canvas.Strokes)-1]
+					a.canvas.RemoveShapesIntersectingStroke(lastStroke)
+				}
+			}
 			a.showCursor = true // Show cursor again after drawing
+			a.isErasing = false
 		case input.MoveCursor:
 			a.cursorPos = action.Position
 			a.showCursor = true
@@ -114,7 +149,7 @@ func (a *App) applyPointerActions(gtx layout.Context) {
 	}
 
 	// Keep animating while drawing.
-	if a.canvas.Current != nil {
+	if a.canvas.Current != nil || a.canvas.CurrentShape != nil {
 		gtx.Execute(op.InvalidateCmd{})
 	}
 }
@@ -144,17 +179,28 @@ func (a *App) applyKeyboardActions(gtx layout.Context) {
 
 func (a *App) applyToolbarActions(gtx layout.Context) {
 	// Get current color, width, and state from toolbar
-	color, widthDp, eraserClicked, slidersChanged := a.toolbar.HandleEvents(gtx)
+	color, widthDp, eraserClicked, slidersChanged, selectedShape := a.toolbar.HandleEvents(gtx)
 
-	// If eraser was clicked, switch to eraser
+	// Handle shape selection
+	if selectedShape != tool.NoShape {
+		a.shape.Type = selectedShape
+		a.shape.Active = true
+		// Deactivate eraser when shape is selected
+		a.pen.ColorPreset = tool.Red
+	}
+
+	// If eraser was clicked, switch to eraser and deactivate shapes
 	if eraserClicked {
 		a.pen.SetColor(tool.Eraser)
+		a.shape.Active = false
 	} else if slidersChanged {
 		// If sliders changed, update from slider values (exits eraser mode)
 		a.pen.Color = color
 		a.pen.WidthDp = widthDp
 		// Clear the eraser preset when switching to custom color
 		a.pen.ColorPreset = tool.Red // Default to something, actual color is from sliders
+		// Deactivate shapes when drawing with sliders
+		a.shape.Active = false
 	}
 
 	// Always invalidate to keep UI responsive

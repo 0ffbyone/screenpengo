@@ -128,10 +128,19 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) []input.Action {
 	return actions
 }
 
-// Layout renders the toolbar as a left sidebar.
+// Layout renders the toolbar as a left sidebar, vertically centered.
 func (t *Toolbar) Layout(gtx layout.Context, currentColor tool.ColorPreset, currentWidth tool.WidthPreset) layout.Dimensions {
 	fmt.Printf("Toolbar.Layout called - Constraints: Min=%v Max=%v\n", gtx.Constraints.Min, gtx.Constraints.Max)
-	dims := t.layoutPanel(gtx, currentColor, currentWidth)
+
+	// Vertically center the sidebar
+	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Flexed(1, layout.Spacer{}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return t.layoutPanel(gtx, currentColor, currentWidth)
+		}),
+		layout.Flexed(1, layout.Spacer{}.Layout),
+	)
+
 	fmt.Printf("Toolbar dimensions: %v\n", dims.Size)
 	return dims
 }

@@ -16,6 +16,7 @@ const (
 	keyOrange = "O"
 	keyPink   = "P"
 	keyBlur   = "X"
+	keyEraser = "E"
 	keyThin   = "1"
 	keyMedium = "2"
 	keyThick  = "3"
@@ -99,6 +100,8 @@ func (h *KeyboardHandler) keyToAction(keyName string) (Action, bool) {
 		return Action{Type: SetColor, ColorPreset: tool.Pink}, true
 	case keyBlur:
 		return Action{Type: SetColor, ColorPreset: tool.Blur}, true
+	case keyEraser:
+		return Action{Type: SetColor, ColorPreset: tool.Eraser}, true
 	case keyThin:
 		return Action{Type: SetWidth, WidthPreset: tool.Thin}, true
 	case keyMedium:

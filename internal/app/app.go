@@ -126,12 +126,19 @@ func (a *App) applyKeyboardActions(gtx layout.Context) {
 }
 
 func (a *App) applyToolbarActions(gtx layout.Context) {
-	// Get current color and width from toolbar sliders
-	color, widthDp := a.toolbar.HandleEvents(gtx)
+	// Get current color, width, and state from toolbar
+	color, widthDp, eraserClicked, slidersChanged := a.toolbar.HandleEvents(gtx)
 
-	// Update pen config directly
-	a.pen.Color = color
-	a.pen.WidthDp = widthDp
+	// If eraser was clicked, switch to eraser
+	if eraserClicked {
+		a.pen.SetColor(tool.Eraser)
+	} else if slidersChanged {
+		// If sliders changed, update from slider values (exits eraser mode)
+		a.pen.Color = color
+		a.pen.WidthDp = widthDp
+		// Clear the eraser preset when switching to custom color
+		a.pen.ColorPreset = tool.Red // Default to something, actual color is from sliders
+	}
 
 	// Always invalidate to keep UI responsive
 	gtx.Execute(op.InvalidateCmd{})

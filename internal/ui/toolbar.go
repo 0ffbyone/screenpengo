@@ -17,8 +17,9 @@ import (
 // Toolbar provides a UI overlay for selecting colors and widths.
 type Toolbar struct {
 	// Main buttons
-	colorButton widget.Clickable
-	widthButton widget.Clickable
+	colorButton  widget.Clickable
+	widthButton  widget.Clickable
+	eraserButton widget.Clickable
 
 	// Color sliders (shown when color picker is open)
 	redSlider   widget.Float
@@ -27,6 +28,12 @@ type Toolbar struct {
 
 	// Width slider (shown when width picker is open)
 	widthSlider widget.Float
+
+	// Previous slider values to detect changes
+	prevRedValue   float32
+	prevGreenValue float32
+	prevBlueValue  float32
+	prevWidthValue float32
 
 	// State to track which panel is open
 	colorPickerOpen bool
@@ -50,8 +57,8 @@ func NewToolbar(theme *material.Theme) *Toolbar {
 	}
 }
 
-// HandleEvents processes toolbar button clicks and slider changes, returns the current color and width.
-func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32) {
+// HandleEvents processes toolbar button clicks and slider changes, returns the current color, width, and state flags.
+func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool) {
 	// Handle button clicks
 	if t.colorButton.Clicked(gtx) {
 		t.colorPickerOpen = !t.colorPickerOpen
@@ -69,6 +76,25 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 		}
 	}
 
+	if t.eraserButton.Clicked(gtx) {
+		eraserClicked = true
+		// Close all pickers when eraser is clicked
+		t.colorPickerOpen = false
+		t.widthPickerOpen = false
+	}
+
+	// Check if sliders have changed
+	if t.redSlider.Value != t.prevRedValue ||
+	   t.greenSlider.Value != t.prevGreenValue ||
+	   t.blueSlider.Value != t.prevBlueValue ||
+	   t.widthSlider.Value != t.prevWidthValue {
+		slidersChanged = true
+		t.prevRedValue = t.redSlider.Value
+		t.prevGreenValue = t.greenSlider.Value
+		t.prevBlueValue = t.blueSlider.Value
+		t.prevWidthValue = t.widthSlider.Value
+	}
+
 	// Get color from RGB sliders (0.0 to 1.0)
 	currentColor = color.NRGBA{
 		R: uint8(t.redSlider.Value * 255),
@@ -80,7 +106,7 @@ func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, cu
 	// Get width from slider (map 0.0-1.0 to 2-20 dp)
 	currentWidth = 2 + (t.widthSlider.Value * 18)
 
-	return currentColor, currentWidth
+	return currentColor, currentWidth, eraserClicked, slidersChanged
 }
 
 // Layout renders the toolbar as a left sidebar, vertically centered.
@@ -115,7 +141,7 @@ func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				// Color button with current color preview
+				// Color button
 				btn := material.Button(t.theme, &t.colorButton, "Color")
 				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
 				return btn.Layout(gtx)
@@ -125,6 +151,13 @@ func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 				// Width button
 				btn := material.Button(t.theme, &t.widthButton, "Width")
 				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				// Eraser button
+				btn := material.Button(t.theme, &t.eraserButton, "Eraser")
+				btn.Background = color.NRGBA{R: 220, G: 220, B: 220, A: 220}
 				return btn.Layout(gtx)
 			}),
 		)

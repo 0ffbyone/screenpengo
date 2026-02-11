@@ -1,4 +1,4 @@
-module annotator_gio_fullscreen_clean
+module screenpengo
 
 go 1.23.8
 

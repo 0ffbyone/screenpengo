@@ -1,3 +1,3 @@
 *.sum
-screenpen-go
+/bin/
 CLAUDE.md

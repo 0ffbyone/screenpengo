@@ -7,15 +7,12 @@ import (
 	"gioui.org/f32"
 )
 
-// Stroke represents a single drawing path with color and width.
 type Stroke struct {
 	Points []f32.Point
 	Color  color.NRGBA
-	Width  float32 // in pixels
+	Width  float32
 }
 
-// appendInterpolated adds interpolated points between a and b to ensure smooth lines.
-// spacing determines the maximum distance between points.
 func appendInterpolated(dst *[]f32.Point, a, b f32.Point, spacing float32) {
 	if spacing <= 1 {
 		*dst = append(*dst, b)

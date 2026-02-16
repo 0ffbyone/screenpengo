@@ -7,7 +7,6 @@ import (
 	"screenpengo/internal/tool"
 )
 
-// Key name constants from Gio framework.
 const (
 	keyRed    = "R"
 	keyGreen  = "G"
@@ -24,7 +23,6 @@ const (
 	keyClear  = "C"
 )
 
-// ActionType represents the type of action triggered by keyboard input.
 type ActionType int
 
 const (
@@ -36,26 +34,21 @@ const (
 	Quit
 )
 
-// Action represents a user action triggered by keyboard input.
 type Action struct {
 	Type        ActionType
 	ColorPreset tool.ColorPreset
 	WidthPreset tool.WidthPreset
 }
 
-// KeyboardHandler processes keyboard events and returns actions.
 type KeyboardHandler struct{}
 
-// NewKeyboardHandler creates a new keyboard handler.
 func NewKeyboardHandler() *KeyboardHandler {
 	return &KeyboardHandler{}
 }
 
-// HandleEvents processes all pending keyboard events and returns actions to perform.
 func (h *KeyboardHandler) HandleEvents(gtx layout.Context, keyTag *struct{}) []Action {
 	var actions []Action
 
-	// Consume focus events (required by Gio).
 	for {
 		_, ok := gtx.Event(key.FocusFilter{Target: keyTag})
 		if !ok {
@@ -63,7 +56,6 @@ func (h *KeyboardHandler) HandleEvents(gtx layout.Context, keyTag *struct{}) []A
 		}
 	}
 
-	// Process key press events.
 	for {
 		ev, ok := gtx.Event(key.Filter{Focus: keyTag, Name: ""})
 		if !ok {
@@ -82,8 +74,6 @@ func (h *KeyboardHandler) HandleEvents(gtx layout.Context, keyTag *struct{}) []A
 	return actions
 }
 
-// keyToAction maps a key name to an action.
-// Returns (action, true) if the key is recognized, or (zero action, false) otherwise.
 func (h *KeyboardHandler) keyToAction(keyName string) (Action, bool) {
 	switch keyName {
 	case keyRed:

@@ -1,6 +1,5 @@
 package tool
 
-// ShapeType represents different geometric shapes that can be drawn.
 type ShapeType int
 
 const (
@@ -11,7 +10,6 @@ const (
 	Arrow
 )
 
-// ShapeConfig holds the current shape drawing settings.
 type ShapeConfig struct {
 	Type   ShapeType
 	Active bool

@@ -10,7 +10,6 @@ const (
 	noButtons pointer.Buttons = 0
 )
 
-// PointerActionType represents the type of action triggered by pointer input.
 type PointerActionType int
 
 const (
@@ -21,21 +20,17 @@ const (
 	MoveCursor
 )
 
-// PointerAction represents a user action triggered by pointer input.
 type PointerAction struct {
 	Type     PointerActionType
 	Position f32.Point
 }
 
-// PointerHandler processes pointer events and returns actions.
 type PointerHandler struct{}
 
-// NewPointerHandler creates a new pointer handler.
 func NewPointerHandler() *PointerHandler {
 	return &PointerHandler{}
 }
 
-// HandleEvents processes all pending pointer events and returns actions to perform.
 func (h *PointerHandler) HandleEvents(gtx layout.Context, ptrTag *struct{}) []PointerAction {
 	var actions []PointerAction
 
@@ -51,7 +46,6 @@ func (h *PointerHandler) HandleEvents(gtx layout.Context, ptrTag *struct{}) []Po
 
 		switch pe.Kind {
 		case pointer.Press:
-			// Only handle primary button (left mouse button).
 			isPrimaryButton := pe.Buttons&pointer.ButtonPrimary != noButtons
 			if isPrimaryButton {
 				actions = append(actions, PointerAction{
@@ -65,7 +59,6 @@ func (h *PointerHandler) HandleEvents(gtx layout.Context, ptrTag *struct{}) []Po
 				Position: pe.Position,
 			})
 		case pointer.Move:
-			// Track cursor position for visual feedback
 			actions = append(actions, PointerAction{
 				Type:     MoveCursor,
 				Position: pe.Position,

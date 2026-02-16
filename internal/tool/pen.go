@@ -2,7 +2,6 @@ package tool
 
 import "image/color"
 
-// ColorPreset represents a predefined pen color.
 type ColorPreset int
 
 const (
@@ -16,7 +15,6 @@ const (
 	Eraser
 )
 
-// WidthPreset represents a predefined pen width level.
 type WidthPreset int
 
 const (
@@ -25,7 +23,6 @@ const (
 	Thick
 )
 
-// PenConfig holds the current pen color and width settings.
 type PenConfig struct {
 	Color       color.NRGBA
 	WidthDp     float32
@@ -33,7 +30,6 @@ type PenConfig struct {
 	WidthPreset WidthPreset
 }
 
-// SetColor sets the pen color to a predefined preset.
 func (p *PenConfig) SetColor(preset ColorPreset) {
 	p.ColorPreset = preset
 	switch preset {
@@ -50,18 +46,14 @@ func (p *PenConfig) SetColor(preset ColorPreset) {
 	case Pink:
 		p.Color = color.NRGBA{R: 255, G: 105, B: 180, A: 255}
 	case Blur:
-		// "Blur" pen: wide semi-transparent black.
 		p.Color = color.NRGBA{A: 0x40}
 		p.WidthDp = 20
 		p.WidthPreset = Thick
 	case Eraser:
-		// Eraser: opaque white, keeps current width
 		p.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-		// Don't change width - keep whatever width is currently set
 	}
 }
 
-// SetWidth sets the pen width to a predefined level.
 func (p *PenConfig) SetWidth(preset WidthPreset) {
 	p.WidthPreset = preset
 	switch preset {

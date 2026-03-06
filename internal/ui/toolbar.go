@@ -16,6 +16,7 @@ import (
 )
 
 type Toolbar struct {
+	hideButton   widget.Clickable
 	colorButton  widget.Clickable
 	widthButton  widget.Clickable
 	eraserButton widget.Clickable
@@ -59,6 +60,7 @@ type Toolbar struct {
 	loadDialogOpen   bool
 
 	eraserActive bool
+	hidden       bool
 
 	theme *material.Theme
 }
@@ -87,10 +89,37 @@ func NewToolbar(theme *material.Theme) *Toolbar {
 	}
 }
 
+func (t *Toolbar) ToggleHidden() {
+	t.hidden = !t.hidden
+	if t.hidden {
+		t.colorPickerOpen = false
+		t.widthPickerOpen = false
+		t.shapesPickerOpen = false
+		t.saveDialogOpen = false
+		t.loadDialogOpen = false
+	}
+}
+
 func (t *Toolbar) HandleEvents(gtx layout.Context) (currentColor color.NRGBA, currentWidth float32, eraserClicked bool, slidersChanged bool, selectedShape tool.ShapeType, saveRequested bool, saveFilename string, loadRequested bool, loadFilename string) {
 	selectedShape = tool.NoShape
 	saveRequested = false
 	loadRequested = false
+
+	if t.hideButton.Clicked(gtx) {
+		t.ToggleHidden()
+	}
+
+	if t.hidden {
+		currentColor = color.NRGBA{
+			R: uint8(t.redSlider.Value * 255),
+			G: uint8(t.greenSlider.Value * 255),
+			B: uint8(t.blueSlider.Value * 255),
+			A: 255,
+		}
+		currentWidth = 2 + (t.widthSlider.Value * 18)
+		return
+	}
+
 	if t.colorButton.Clicked(gtx) {
 		t.colorPickerOpen = !t.colorPickerOpen
 		if t.colorPickerOpen {
@@ -223,6 +252,9 @@ func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Flexed(1, layout.Spacer{}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if t.hidden {
+				return t.layoutHiddenToggle(gtx)
+			}
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return t.layoutMainButtons(gtx)
@@ -247,9 +279,23 @@ func (t *Toolbar) Layout(gtx layout.Context) layout.Dimensions {
 	)
 }
 
+func (t *Toolbar) layoutHiddenToggle(gtx layout.Context) layout.Dimensions {
+	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
+		btn := material.Button(t.theme, &t.hideButton, "☰")
+		btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 200}
+		return btn.Layout(gtx)
+	})
+}
+
 func (t *Toolbar) layoutMainButtons(gtx layout.Context) layout.Dimensions {
 	return t.drawPanel(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Spacing: layout.SpaceStart}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(t.theme, &t.hideButton, "☰")
+				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 200}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: 10}.Layout),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				btn := material.Button(t.theme, &t.colorButton, "Color")
 				btn.Background = color.NRGBA{R: 70, G: 70, B: 70, A: 220}

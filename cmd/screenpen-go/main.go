@@ -19,6 +19,7 @@ func main() {
 		w := new(app.Window)
 		w.Option(
 			app.Title("gio-screenpen"),
+			app.Decorated(false),
 		)
 
 		a := internalApp.New()

@@ -61,6 +61,8 @@ func New() *App {
 }
 
 func (a *App) Frame(gtx layout.Context) {
+	initPlatform()
+
 	area := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
 	event.Op(gtx.Ops, &a.ptrTag)
 	area.Pop()
@@ -153,6 +155,8 @@ func (a *App) applyKeyboardActions(gtx layout.Context) {
 			a.pen.SetWidth(action.WidthPreset)
 		case input.ToggleDim:
 			a.renderer.Dim = !a.renderer.Dim
+		case input.ToggleUI:
+			a.toolbar.ToggleHidden()
 		case input.Clear:
 			a.canvas.Clear()
 		case input.Quit:

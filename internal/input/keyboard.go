@@ -19,8 +19,9 @@ const (
 	keyThin   = "1"
 	keyMedium = "2"
 	keyThick  = "3"
-	keyDim    = "A"
-	keyClear  = "C"
+	keyDim     = "A"
+	keyClear   = "C"
+	keyHideUI  = "H"
 )
 
 type ActionType int
@@ -32,6 +33,7 @@ const (
 	ToggleDim
 	Clear
 	Quit
+	ToggleUI
 )
 
 type Action struct {
@@ -102,6 +104,8 @@ func (h *KeyboardHandler) keyToAction(keyName string) (Action, bool) {
 		return Action{Type: ToggleDim}, true
 	case keyClear:
 		return Action{Type: Clear}, true
+	case keyHideUI:
+		return Action{Type: ToggleUI}, true
 	case string(key.NameEscape):
 		return Action{Type: Quit}, true
 	default:

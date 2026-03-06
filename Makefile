@@ -11,8 +11,8 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@awk 'BEGIN {FS = ":.*##"; printf ""} /^[a-zA-Z_-]+:.*?##/ { printf "  %-10s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
-build: tidy ## Build the application binary
-	go build -o $(BINARY) $(MAIN)
+build: ## Build the application binary
+	go build -mod=vendor -o $(BINARY) $(MAIN)
 
 clean: ## Remove built binary
 	rm -f $(BINARY)
